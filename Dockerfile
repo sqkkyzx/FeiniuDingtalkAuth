@@ -10,6 +10,7 @@ RUN uv pip install --system --no-cache-dir --upgrade \
     pycryptodome
 
 RUN groupadd -r -g 1000 appuser && \
+    mkdir -p /usr/src/myapp && \
     useradd -r -u 1000 -g appuser appuser && \
     chown -R appuser:appuser /usr/src/myapp
 
