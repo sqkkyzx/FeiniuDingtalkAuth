@@ -1,0 +1,11 @@
+[project]
+name = "Feiniu_Dingtalk_Auth"
+version = "0.1.0"
+description = "使用钉钉代理登录飞牛"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[all]",
+    "httpx",
+    "colorama",
+    "pycryptodome>=3.23.0",
+]
