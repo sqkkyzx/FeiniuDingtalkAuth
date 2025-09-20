@@ -2,18 +2,27 @@ services:
   fn-dingtalk-auth:
     container_name: fn-dingtalk-auth
     restart: unless-stopped
-    build:
-      context: .
+    image: sqkkyzx/fn-dingtalk-auth
     environment:
       TZ: Asia/Shanghai
-      JUMP_PATH_WHEN_LOGIN: /
+      # 钉钉应用的 agent_id
       AGENT_ID:
+      # 钉钉应用的 client_id
       CLIENT_ID:
+      # 钉钉应用的 client_secret
       CLIENT_SECRET:
+      # 钉钉智能人事花名册中，存储 nas 用户名的字段 id
       USER_FIELD_CODE:
+      # 钉钉智能人事花名册中，存储 nas 用户密码的字段 id
       PWD_FIELD_CODE:
+      # browserless 链接地址，不用动
       REMOTE_BROWSER_WS: ws://fn-browserless:3000/chrome/playwright?token=BrowserlessToken
+      # 如果需要本地调试，可以传入 Chrome 浏览器 CDP 链接地址， 将 REMOTE_BROWSER_WS 清空
       REMOTE_BROWSER_CDP:
+      # NSA 的地址
+      BASE_URL: http(s)://<your-fn-nas>:<port>
+      # 如果公共页面在 cnd 或代理后面，可以使用源站的 URL 作为登录页，可加快登录速度 0.5-1 秒
+      LOGIN_URL: http(s)://<your-fn-nas>:<port>
 
   fn-browserless:
     image: ghcr.io/browserless/multi
