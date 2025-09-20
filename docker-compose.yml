@@ -1,0 +1,26 @@
+services:
+  fn-dingtalk-auth:
+    container_name: fn-dingtalk-auth
+    restart: unless-stopped
+    build:
+      context: .
+    environment:
+      TZ: Asia/Shanghai
+      JUMP_PATH_WHEN_LOGIN: /
+      AGENT_ID:
+      CLIENT_ID:
+      CLIENT_SECRET:
+      USER_FIELD_CODE:
+      PWD_FIELD_CODE:
+      REMOTE_BROWSER_WS: ws://fn-browserless:3000/chrome/playwright?token=BrowserlessToken
+      REMOTE_BROWSER_CDP:
+
+  fn-browserless:
+    image: ghcr.io/browserless/multi
+    container_name: fn-browserless
+    restart: unless-stopped
+    expose: ["3000"]
+    environment:
+      TZ: "Asia/Shanghai"
+      TOKEN: "BrowserlessToken"
+      TIMEOUT: "30000"
