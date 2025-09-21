@@ -213,8 +213,13 @@ async def login(
         json={"appKey": CLIENT_ID, "appSecret": CLIENT_SECRET}
     ).json()['accessToken']
 
+    t = time.time()
+
     if userinfo := USERINFO_CACHE.get(unionid):
         userid = userinfo.get('userid')
+        user = userinfo.get('name')
+        feiniu_auth_info = userinfo.get('feiniu_auth_info')
+        logging.info(f"用户{user}<{userid}>正在登录，已从缓存中获取用户信息，耗时{time.time() - t:.2f}s")
     else:
         response_userid = httpx.post(
             f"https://oapi.dingtalk.com/topapi/user/getbyunionid",
@@ -227,31 +232,31 @@ async def login(
             params={"access_token": app_access_token},
             json={"userid": userid}
         ).json()['result']
-        USERINFO_CACHE[unionid] = userinfo
+        user = userinfo.get('name')
+        logging.info(f"用户{user}<{userid}>正在登录，已从钉钉花名册中获取用户信息，耗时{time.time() - t:.2f}s")
 
-    user = userinfo.get('name')
-
-    logging.info(f"用户{user}<{userid}>正在登录")
-
-    try:
-        feiniu_auth_info = httpx.post(
-            f"https://api.dingtalk.com/v1.0/hrm/rosters/lists/query",
-            headers={"x-acs-dingtalk-access-token": app_access_token},
-            json={
-                "userIdList": [userid],
-                "fieldFilterList": [USER_FIELD_CODE, PWD_FIELD_CODE],
-                "appAgentId": AGENT_ID,
-                "text2SelectConvert": True
-            }
-        ).json()
-        feiniu_auth_info = feiniu_auth_info['result'][0]['fieldDataList']
-        if not feiniu_auth_info:
-            raise F"用户{user}<{userid}>没有在钉钉花名册中配置飞牛登录信息。"
-        if not isinstance(feiniu_auth_info, list):
-            raise F"获取用户{user}<{userid}>的飞牛登录信息时 API 响应有误。"
-    except Exception as e:
-        logging.error(f"无法从钉钉花名册获取用户{user}<{userid}>的飞牛登录信息。{e}")
-        return origin_login_page
+        t = time.time()
+        try:
+            feiniu_auth_info = httpx.post(
+                f"https://api.dingtalk.com/v1.0/hrm/rosters/lists/query",
+                headers={"x-acs-dingtalk-access-token": app_access_token},
+                json={
+                    "userIdList": [userid],
+                    "fieldFilterList": [USER_FIELD_CODE, PWD_FIELD_CODE],
+                    "appAgentId": AGENT_ID,
+                    "text2SelectConvert": True
+                }
+            ).json()
+            feiniu_auth_info = feiniu_auth_info['result'][0]['fieldDataList']
+            if not feiniu_auth_info:
+                raise F"用户{user}<{userid}>没有在钉钉花名册中配置飞牛登录信息。"
+            if not isinstance(feiniu_auth_info, list):
+                raise F"获取用户{user}<{userid}>的飞牛登录信息时 API 响应有误。"
+            userinfo["feiniu_auth_info"] = feiniu_auth_info
+            USERINFO_CACHE[unionid] = userinfo
+        except Exception as e:
+            logging.error(f"无法从钉钉花名册获取用户{user}<{userid}>的飞牛登录信息。{e}")
+            return origin_login_page
 
     feiniu_user, feiniu_pwd = None, None
     for item in feiniu_auth_info:
@@ -259,6 +264,7 @@ async def login(
             feiniu_user = item['fieldValueList'][0]["value"]
         if item['fieldCode'] == PWD_FIELD_CODE:
             feiniu_pwd = item['fieldValueList'][0]["value"]
+        logging.info(f"用户{user}<{userid}>正在登录，获取用户密码耗时{time.time() - t:.2f}s")
     if not feiniu_user or not feiniu_pwd:
         logging.error(F"用户{user}<{userid}>的用户名或密码信息为空。")
         return origin_login_page
@@ -291,118 +297,9 @@ async def login(
         logging.error(F"用户{user}<{userid}>的用户名和密码信息有误或 API 故障。{e}")
         return origin_login_page
 
-
-@app.get("/login", response_class=HTMLResponse)
-async def login(redirect_uri: str = Query(alias="redirect_uri", default=None)):
-    login_page_html = """
-    <!DOCTYPE html>
-    <html class="light" lang="zh-CN">
-      <head>
-        <script type="module" crossorigin src="/assets/polyfills-CloYm7Dj.js"></script>
-
-        <meta charset="UTF-8" />
-        <!-- <meta name="viewport" content="width=device-width, initial-scale=0.5 minimum-scale=0.5" /> -->
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <style>
-          html, 
-          body { 
-            background: linear-gradient(110deg, #4a5568 0.26%, #3a424f 97.78%); 
-          } 
-          .incompatible-box { 
-            display: flex; 
-            width: 100%; 
-            height: 100vh; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            background-color: white; 
-          } 
-          .incompatible-box h1 { 
-            margin: 0; 
-            font-size: 32px; 
-            line-height: 44px; 
-            font-weight: 600; 
-            color: #202327; 
-            margin-bottom: 20px; 
-          } 
-          .incompatible-box .item1 { 
-            margin-right: 60px; 
-          } 
-          .incompatible-box .logo { 
-            position: absolute; 
-            display: flex; 
-            bottom: 40px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-          } 
-          .incompatible-box .logo div { 
-            font-size: 20px; 
-            line-height: 32px; 
-            font-weight: 600; 
-            color: #202327; 
-            margin-left: 8px; 
-          } 
-          .incompatible-box p { 
-            margin: 0; 
-            font-size: 18px; 
-            line-height: 24px; 
-            color: #4a5568; 
-            margin-bottom: 60px; 
-          } 
-          .incompatible-box span { 
-            display: inline-block; 
-            margin-top: 14px; 
-          } 
-        </style>
-        <title>飞牛 fnOS</title>
-        <script type="module" crossorigin src="/assets/index-B02hCrfW.js"></script>
-        <link rel="modulepreload" crossorigin href="/assets/codemirror-D-aNaB2m.js">
-        <link rel="modulepreload" crossorigin href="/assets/lottie-react-BfmfuY3x.js">
-        <link rel="modulepreload" crossorigin href="/assets/rc-select-Bf5TP5wU.js">
-        <link rel="modulepreload" crossorigin href="/assets/lodash-C933sey-.js">
-        <link rel="stylesheet" crossorigin href="/assets/index-C_PIl493.css">
-      </head>
-
-      <body>
-        <div id="root"></div>
-        <script>
-          // 钉钉UA检测和跳转
-          function isDingTalk() {
-            var ua = navigator.userAgent.toLowerCase();
-            return ua.indexOf('dingtalk') !== -1 || ua.indexOf('dtdream') !== -1;
-          }
-
-          // 首先检查是否是钉钉环境
-          if (isDingTalk()) {
-            // 如果是钉钉，直接跳转到钉钉登录页
-            window.location.href = '/auth/dingtalk/login{{redirect_url}}';
-          } else {
-            // 不是钉钉，继续检查是否是IE
-            function isIE() { 
-              var myNav = navigator.userAgent.toLowerCase(); 
-              return myNav.indexOf('msie') != -1 || myNav.indexOf('trident') != -1 ? true : false; 
-            } 
-
-            if (isIE()) { 
-              document.querySelector('#root').innerHTML =
-                '<div class="incompatible-box"><h1>当前浏览器不兼容飞牛</h1><p>我们建议您使用以下浏览器的最新版获取更好的体验</p><div><img src="static/img/chrome.png" class="item1" alt="" width="auto" height="100" /><img src="static/img/edge.png" alt="" width="auto" height="100" /></div><div><span class="item1">Google Chrome</span><span>Microsoft Edge</span></div><div class="logo"><img src="static/img/trim-logo.png" width="32" height="32" /><div>飞牛</div></div></div>'; 
-            }
-          }
-        </script>
-      </body>
-    </html>
-    """
-    if redirect_uri:
-        return HTMLResponse(
-            content=login_page_html.replace("{{redirect_url}}", F"?redirect_url={redirect_uri}")
-        )
-    return HTMLResponse(content=login_page_html.replace("{{redirect_url}}", ""))
-
 @app.get("/v/login", response_class=HTMLResponse)
 async def login(request:Request):
     logging.info(request.cookies)
-    if not request.cookies.get("fnos-long-token"):
-        return RedirectResponse(url=f"/login?redirect_url={BASE_URL}/v/login")
     trim_mc_login_api = LOGIN_URL.replace("/login","/v/api/v1/login")
     trim_mc_login_res = httpx.post(
         trim_mc_login_api,
