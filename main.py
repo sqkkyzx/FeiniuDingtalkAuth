@@ -401,6 +401,8 @@ async def login(redirect_uri: str = Query(alias="redirect_uri", default=None)):
 @app.get("/v/login", response_class=HTMLResponse)
 async def login(request:Request):
     logging.info(request.cookies)
+    if not request.cookies.get("fnos-long-token"):
+        return RedirectResponse(url=f"/login?redirect_url={BASE_URL}/v/login")
     trim_mc_login_api = LOGIN_URL.replace("/login","/v/api/v1/login")
     trim_mc_login_res = httpx.post(
         trim_mc_login_api,
