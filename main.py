@@ -2,14 +2,14 @@ import asyncio
 import logging
 from typing import Literal
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 import httpx
 import uuid
 import os
 from colorama import Fore
 from playwright.async_api import async_playwright
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 import time
 
 REDIRECT_QUEUE = {}
@@ -22,12 +22,18 @@ USER_FIELD_CODE = os.environ.get('USER_FIELD_CODE')
 PWD_FIELD_CODE = os.environ.get('PWD_FIELD_CODE')
 REMOTE_BROWSER_WS = os.environ.get('REMOTE_BROWSER_WS', "").rstrip("/")
 REMOTE_BROWSER_CDP = os.environ.get('REMOTE_BROWSER_CDP', "").rstrip("/")
-BASE_URL = os.environ['BASE_URL'].rstrip("/")
+BASE_URL = os.environ.get('BASE_URL', "").rstrip("/")
 LOGIN_URL = os.environ.get('LOGIN_URL', F"{BASE_URL}/login").rstrip("/")
+TRIM_MC_USERNAME = os.environ.get('TRIM_MC_USERNAME', "")
+TRIM_MC_PASSWORD = os.environ.get('TRIM_MC_PASSWORD', "")
 
 logging.basicConfig(
     level=logging.INFO,
-    format=f'{Fore.BLUE}level={Fore.RESET}%(levelname)s {Fore.BLUE}ts={Fore.RESET}%(asctime)s {Fore.BLUE}caller={Fore.RESET}%(filename)s {Fore.BLUE}func={Fore.RESET}%(funcName)s:%(lineno)d {Fore.BLUE}msg={Fore.RESET}%(message)s',
+    format=f'{Fore.BLUE}level={Fore.RESET}%(levelname)s '
+           f'{Fore.BLUE}ts={Fore.RESET}%(asctime)s '
+           f'{Fore.BLUE}caller={Fore.RESET}%(filename)s '
+           f'{Fore.BLUE}func={Fore.RESET}%(funcName)s:%(lineno)d '
+           f'{Fore.BLUE}msg={Fore.RESET}%(message)s',
     encoding='utf-8',
     datefmt='%Y-%m-%dT%H:%M:%S'
 )
@@ -43,7 +49,9 @@ class WebBrowser:
         self._browser = None
         self._playwright = None
         self._headers = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
         }
         self._lock = asyncio.Lock()
 
@@ -286,111 +294,142 @@ async def login(
 
 @app.get("/login", response_class=HTMLResponse)
 async def login(redirect_uri: str = Query(alias="redirect_uri", default=None)):
+    login_page_html = """
+    <!DOCTYPE html>
+    <html class="light" lang="zh-CN">
+      <head>
+        <script type="module" crossorigin src="/assets/polyfills-CloYm7Dj.js"></script>
+
+        <meta charset="UTF-8" />
+        <!-- <meta name="viewport" content="width=device-width, initial-scale=0.5 minimum-scale=0.5" /> -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+          html, 
+          body { 
+            background: linear-gradient(110deg, #4a5568 0.26%, #3a424f 97.78%); 
+          } 
+          .incompatible-box { 
+            display: flex; 
+            width: 100%; 
+            height: 100vh; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            background-color: white; 
+          } 
+          .incompatible-box h1 { 
+            margin: 0; 
+            font-size: 32px; 
+            line-height: 44px; 
+            font-weight: 600; 
+            color: #202327; 
+            margin-bottom: 20px; 
+          } 
+          .incompatible-box .item1 { 
+            margin-right: 60px; 
+          } 
+          .incompatible-box .logo { 
+            position: absolute; 
+            display: flex; 
+            bottom: 40px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+          } 
+          .incompatible-box .logo div { 
+            font-size: 20px; 
+            line-height: 32px; 
+            font-weight: 600; 
+            color: #202327; 
+            margin-left: 8px; 
+          } 
+          .incompatible-box p { 
+            margin: 0; 
+            font-size: 18px; 
+            line-height: 24px; 
+            color: #4a5568; 
+            margin-bottom: 60px; 
+          } 
+          .incompatible-box span { 
+            display: inline-block; 
+            margin-top: 14px; 
+          } 
+        </style>
+        <title>飞牛 fnOS</title>
+        <script type="module" crossorigin src="/assets/index-B02hCrfW.js"></script>
+        <link rel="modulepreload" crossorigin href="/assets/codemirror-D-aNaB2m.js">
+        <link rel="modulepreload" crossorigin href="/assets/lottie-react-BfmfuY3x.js">
+        <link rel="modulepreload" crossorigin href="/assets/rc-select-Bf5TP5wU.js">
+        <link rel="modulepreload" crossorigin href="/assets/lodash-C933sey-.js">
+        <link rel="stylesheet" crossorigin href="/assets/index-C_PIl493.css">
+      </head>
+
+      <body>
+        <div id="root"></div>
+        <script>
+          // 钉钉UA检测和跳转
+          function isDingTalk() {
+            var ua = navigator.userAgent.toLowerCase();
+            return ua.indexOf('dingtalk') !== -1 || ua.indexOf('dtdream') !== -1;
+          }
+
+          // 首先检查是否是钉钉环境
+          if (isDingTalk()) {
+            // 如果是钉钉，直接跳转到钉钉登录页
+            window.location.href = '/auth/dingtalk/login{{redirect_url}}';
+          } else {
+            // 不是钉钉，继续检查是否是IE
+            function isIE() { 
+              var myNav = navigator.userAgent.toLowerCase(); 
+              return myNav.indexOf('msie') != -1 || myNav.indexOf('trident') != -1 ? true : false; 
+            } 
+
+            if (isIE()) { 
+              document.querySelector('#root').innerHTML =
+                '<div class="incompatible-box"><h1>当前浏览器不兼容飞牛</h1><p>我们建议您使用以下浏览器的最新版获取更好的体验</p><div><img src="static/img/chrome.png" class="item1" alt="" width="auto" height="100" /><img src="static/img/edge.png" alt="" width="auto" height="100" /></div><div><span class="item1">Google Chrome</span><span>Microsoft Edge</span></div><div class="logo"><img src="static/img/trim-logo.png" width="32" height="32" /><div>飞牛</div></div></div>'; 
+            }
+          }
+        </script>
+      </body>
+    </html>
+    """
     if redirect_uri:
-        return HTMLResponse(content=login_page_html.replace("{{redirect_url}}", F"?redirect_url={redirect_uri}"))
+        return HTMLResponse(
+            content=login_page_html.replace("{{redirect_url}}", F"?redirect_url={redirect_uri}")
+        )
     return HTMLResponse(content=login_page_html.replace("{{redirect_url}}", ""))
 
-
-login_page_html = """
-<!DOCTYPE html>
-<html class="light" lang="zh-CN">
-  <head>
-    <script type="module" crossorigin src="/assets/polyfills-CloYm7Dj.js"></script>
-
-    <meta charset="UTF-8" />
-    <!-- <meta name="viewport" content="width=device-width, initial-scale=0.5 minimum-scale=0.5" /> -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-      html, 
-      body { 
-        background: linear-gradient(110deg, #4a5568 0.26%, #3a424f 97.78%); 
-      } 
-      .incompatible-box { 
-        display: flex; 
-        width: 100%; 
-        height: 100vh; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: center; 
-        background-color: white; 
-      } 
-      .incompatible-box h1 { 
-        margin: 0; 
-        font-size: 32px; 
-        line-height: 44px; 
-        font-weight: 600; 
-        color: #202327; 
-        margin-bottom: 20px; 
-      } 
-      .incompatible-box .item1 { 
-        margin-right: 60px; 
-      } 
-      .incompatible-box .logo { 
-        position: absolute; 
-        display: flex; 
-        bottom: 40px; 
-        left: 50%; 
-        transform: translateX(-50%); 
-      } 
-      .incompatible-box .logo div { 
-        font-size: 20px; 
-        line-height: 32px; 
-        font-weight: 600; 
-        color: #202327; 
-        margin-left: 8px; 
-      } 
-      .incompatible-box p { 
-        margin: 0; 
-        font-size: 18px; 
-        line-height: 24px; 
-        color: #4a5568; 
-        margin-bottom: 60px; 
-      } 
-      .incompatible-box span { 
-        display: inline-block; 
-        margin-top: 14px; 
-      } 
-    </style>
-    <title>飞牛 fnOS</title>
-    <script type="module" crossorigin src="/assets/index-B02hCrfW.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/codemirror-D-aNaB2m.js">
-    <link rel="modulepreload" crossorigin href="/assets/lottie-react-BfmfuY3x.js">
-    <link rel="modulepreload" crossorigin href="/assets/rc-select-Bf5TP5wU.js">
-    <link rel="modulepreload" crossorigin href="/assets/lodash-C933sey-.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-C_PIl493.css">
-  </head>
-
-  <body>
-    <div id="root"></div>
-    <script>
-      // 钉钉UA检测和跳转
-      function isDingTalk() {
-        var ua = navigator.userAgent.toLowerCase();
-        return ua.indexOf('dingtalk') !== -1 || ua.indexOf('dtdream') !== -1;
-      }
-
-      // 首先检查是否是钉钉环境
-      if (isDingTalk()) {
-        // 如果是钉钉，直接跳转到钉钉登录页
-        window.location.href = '/auth/dingtalk/login{{redirect_url}}';
-      } else {
-        // 不是钉钉，继续检查是否是IE
-        function isIE() { 
-          var myNav = navigator.userAgent.toLowerCase(); 
-          return myNav.indexOf('msie') != -1 || myNav.indexOf('trident') != -1 ? true : false; 
-        } 
-
-        if (isIE()) { 
-          document.querySelector('#root').innerHTML =
-            '<div class="incompatible-box"><h1>当前浏览器不兼容飞牛</h1><p>我们建议您使用以下浏览器的最新版获取更好的体验</p><div><img src="static/img/chrome.png" class="item1" alt="" width="auto" height="100" /><img src="static/img/edge.png" alt="" width="auto" height="100" /></div><div><span class="item1">Google Chrome</span><span>Microsoft Edge</span></div><div class="logo"><img src="static/img/trim-logo.png" width="32" height="32" /><div>飞牛</div></div></div>'; 
+@app.get("/v/login", response_class=HTMLResponse)
+async def login(request:Request):
+    logging.info(request.cookies)
+    trim_mc_login_api = LOGIN_URL.replace("/login","/v/api/v1/login")
+    trim_mc_login_res = httpx.post(
+        trim_mc_login_api,
+        json={"username":TRIM_MC_USERNAME,"password":TRIM_MC_PASSWORD,"app_name":"trimemedia-web"},
+        headers={
+            "Content-Type": "application/json",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
         }
-      }
-    </script>
-  </body>
-</html>
-"""
+    ).json()
+    trim_mc_token = trim_mc_login_res.get("data", {}).get("token")
+    if trim_mc_token:
+        js_code = f"""
+        <script>
+        document.cookie = "Trim-MC-token={trim_mc_token}; Path=/";
+        document.cookie = "lastLoginUsername={quote(TRIM_MC_USERNAME)}; Path=/";
+        localStorage.setItem('lastLoginUsername', '"{TRIM_MC_USERNAME}"');
+        setTimeout(function() {{ window.location.href = '/v'; }});
+        </script>
+        """
+        response = HTMLResponse(content=js_code, media_type="text/html")
+        return response
+    else:
+        logging.error(F"登录失败。")
+        return "登录失败"
 
 if __name__ == "__main__":
+    pass
     # 使用本地 chrome 浏览器测试
-    web_browser = WebBrowser(remote_browser_cdp="http://127.0.0.1:9222")
-    web_browser.login("", "", "")
+    # web_browser = WebBrowser(remote_browser_cdp="http://127.0.0.1:9222")
+    # web_browser.login("", "", "")
