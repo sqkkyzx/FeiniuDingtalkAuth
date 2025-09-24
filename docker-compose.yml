@@ -23,7 +23,10 @@ services:
       BASE_URL: http(s)://<your-fn-nas>:<port>
       # 如果公共页面在 cnd 或代理后面，可以使用源站的 URL 作为登录页，可加快登录速度 0.5-1 秒
       LOGIN_URL: http(s)://<your-fn-nas>:<port>
-
+      # 飞牛影视的管理员账户名
+      TRIM_MC_ADMIN_USERNAME:
+      # 飞牛影视的管理员账户密码
+      TRIM_MC_ADMIN_PASSWORD:
   fn-browserless:
     image: ghcr.io/browserless/multi
     container_name: fn-browserless
