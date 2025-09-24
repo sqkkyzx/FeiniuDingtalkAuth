@@ -177,24 +177,25 @@ app = FastAPI()
 
 
 def get_auth_info(
-        base_url, path, code, redirect_uri, state, origin_login_page,
+        base_url, path, code, custom_redirect_uri, state, origin_login_page,
         user_field_code, pwd_field_code, auth_cache_key
 ):
     user, pwd = None, None
     if not code or not state:
         logging.info("用户正在登录...")
         state = uuid.uuid4().hex
-        REDIRECT_QUEUE[state] = redirect_uri
-        return None, None, RedirectResponse(
-            url=f"https://login.dingtalk.com/oauth2/auth?"
-                f"redirect_uri={F'{base_url}{path}'}"
-                f"&response_type=code"
-                f"&client_id={CLIENT_ID}"
-                f"&scope=openid"
-                f"&state={state}"
-                f"&prompt=consent",
-            status_code=302
-        )
+        REDIRECT_QUEUE[state] = custom_redirect_uri
+        redirect_response = RedirectResponse(
+                    url=f"https://login.dingtalk.com/oauth2/auth?"
+                        f"redirect_uri={F'{base_url}{path}'}"
+                        f"&response_type=code"
+                        f"&client_id={CLIENT_ID}"
+                        f"&scope=openid"
+                        f"&state={state}"
+                        f"&prompt=consent",
+                    status_code=302
+                )
+        return None, None, redirect_response
 
     user_access_token = httpx.post(
         "https://api.dingtalk.com/v1.0/oauth2/userAccessToken",
@@ -274,13 +275,13 @@ def get_auth_info(
 @app.get("/auth/dingtalk/login", response_class=HTMLResponse)
 async def login(
         code: str = Query(alias="code", default=None),
-        redirect_uri: str = Query(alias="redirect_uri", default=None),
+        custom_redirect_uri: str = Query(alias="custom_redirect_uri", default=None),
         state: str = Query(alias="state", default=None)
 ):
     base_url = BASE_URL
     origin_login_page = RedirectResponse(url=F"{base_url}/login")
     user, pwd, redirect = get_auth_info(
-        base_url=base_url, path="/auth/dingtalk/login", code=code, redirect_uri=redirect_uri, state=state,
+        base_url=base_url, path="/auth/dingtalk/login", code=code, custom_redirect_uri=custom_redirect_uri, state=state,
         origin_login_page=origin_login_page,
         user_field_code=USER_FIELD_CODE, pwd_field_code=PWD_FIELD_CODE, auth_cache_key="feiniu_auth_info"
     )
@@ -290,7 +291,7 @@ async def login(
         cookie_dict, local_storage_dict = await web_browser.login(base_url, user, pwd)
         logging.info(F"用户{user}代理登录成功，已提取鉴权信息。")
         if cookie_dict and local_storage_dict:
-            redirect_uri = REDIRECT_QUEUE.pop(state, None) or BASE_URL
+            custom_redirect_uri = REDIRECT_QUEUE.pop(state, None) or BASE_URL
             js_code = f"""
             <script>
             document.cookie = "fnos-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC";
@@ -302,7 +303,7 @@ async def login(
             localStorage.setItem('fnos-RSAPub', '{local_storage_dict.get('fnos-RSAPub').replace("\n", "\\n")}');
             localStorage.setItem('fnos-device', '{local_storage_dict.get('fnos-device')}');
             localStorage.setItem('fnos-Secret', '{local_storage_dict.get('fnos-Secret')}');
-            setTimeout(function() {{ window.location.href = '{redirect_uri}'; }});
+            setTimeout(function() {{ window.location.href = '{custom_redirect_uri}'; }});
             </script>
             """
             response = HTMLResponse(content=js_code, media_type="text/html")
