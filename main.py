@@ -231,6 +231,7 @@ def get_auth_info(
         ).json()['result']
         user_name = userinfo.get('name')
         logging.info(f"用户{user_name}<{user_id}>正在登录，已从钉钉花名册中获取用户信息，耗时{time.time() - t:.2f}s")
+        logging.info(userinfo)
 
     t = time.time()
     if auth_info := userinfo.get(auth_cache_key):
@@ -269,7 +270,6 @@ def get_auth_info(
         except Exception as e:
             logging.info(auth_info)
             logging.error(f"无法从钉钉花名册获取用户{user_name}<{user_id}>的飞牛登录信息。{e}")
-        return user, pwd, None
     if not user or not pwd:
         logging.error(F"用户{user_name}<{user_id}>的用户名或密码信息为空。")
         return None, None, origin_login_page
