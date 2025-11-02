@@ -255,15 +255,21 @@ def get_auth_info(
             userinfo[auth_cache_key] = auth_info
             USERINFO_CACHE[unionid] = userinfo
         except Exception as e:
+            logging.info(auth_info)
             logging.error(f"无法从钉钉花名册获取用户{user_name}<{user_id}>的飞牛登录信息。{e}")
             return None, None, origin_login_page
 
     for item in auth_info:
-        if item['fieldCode'] == user_field_code:
-            user = item['fieldValueList'][0]["value"]
-        if item['fieldCode'] == pwd_field_code:
-            pwd = item['fieldValueList'][0]["value"]
-        logging.info(f"用户{user_name}<{user_id}>正在登录，获取用户密码耗时{time.time() - t:.2f}s")
+        try:
+            if item['fieldCode'] == user_field_code:
+                user = item['fieldValueList'][0]["value"]
+            if item['fieldCode'] == pwd_field_code:
+                pwd = item['fieldValueList'][0]["value"]
+            logging.info(f"用户{user_name}<{user_id}>正在登录，获取用户密码耗时{time.time() - t:.2f}s")
+        except Exception as e:
+            logging.info(auth_info)
+            logging.error(f"无法从钉钉花名册获取用户{user_name}<{user_id}>的飞牛登录信息。{e}")
+        return user, pwd, None
     if not user or not pwd:
         logging.error(F"用户{user_name}<{user_id}>的用户名或密码信息为空。")
         return None, None, origin_login_page
